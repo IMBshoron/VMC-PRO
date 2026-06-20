@@ -803,11 +803,19 @@ function initControlStation() {
   const saveApi = document.getElementById("save-api-keys");
   if (saveApi) {
     saveApi.addEventListener("click", () => {
-      CONFIG.serpApiKey = document.getElementById("admin-serp-key").value;
-      CONFIG.gravatarApiKey = document.getElementById("admin-gravatar-key").value;
-      CONFIG.imgbbApiKey = document.getElementById("admin-imgbb-key").value;
-      saveRegistry();
-      showPremiumToast("Security credentials successfully committed", "success");
+      const serpVal = document.getElementById("admin-serp-key").value;
+      const gravatarVal = document.getElementById("admin-gravatar-key").value;
+      const imgbbVal = document.getElementById("admin-imgbb-key").value;
+      
+      localStorage.setItem("vmc_serpApiKey", serpVal);
+      localStorage.setItem("vmc_gravatarApiKey", gravatarVal);
+      localStorage.setItem("vmc_imgbbApiKey", imgbbVal);
+      
+      CONFIG.serpApiKey = serpVal;
+      CONFIG.gravatarApiKey = gravatarVal;
+      CONFIG.imgbbApiKey = imgbbVal;
+      
+      showPremiumToast("Security credentials successfully saved in browser", "success");
       checkAllStatuses();
       updateApiUsageBar();
     });
@@ -820,7 +828,7 @@ function initControlStation() {
       CONFIG.themeSecondary = document.getElementById("theme-secondary").value;
       CONFIG.themeBg = document.getElementById("theme-bg").value;
       applySystemTheme();
-      saveRegistry();
+      saveGlobalRegistry();
       showPremiumToast("Chromatic profiles synchronized", "success");
     });
   }
@@ -844,7 +852,7 @@ function initControlStation() {
       }
 
       applySystemBranding();
-      saveRegistry();
+      saveGlobalRegistry();
       showPremiumToast("Branding registries rebuilt successfully", "success");
     });
   }
@@ -972,19 +980,44 @@ function triggerLimitAlert(serviceName) {
 }
 
 // ===== PERSISTENCY STATE =====
-function saveRegistry() {
-  db.ref("vmc_config").set(CONFIG).catch(err => console.error("Cloud synced failure", err));
+function loadLocalApiKeys() {
+  const localSerp = localStorage.getItem("vmc_serpApiKey");
+  const localGravatar = localStorage.getItem("vmc_gravatarApiKey");
+  const localImgbb = localStorage.getItem("vmc_imgbbApiKey");
+  
+  if (localSerp !== null) CONFIG.serpApiKey = localSerp;
+  if (localGravatar !== null) CONFIG.gravatarApiKey = localGravatar;
+  if (localImgbb !== null) CONFIG.imgbbApiKey = localImgbb;
+}
+
+function saveGlobalRegistry() {
+  const globalConfig = {
+    siteName: CONFIG.siteName,
+    devName: CONFIG.devName,
+    logoUrl: CONFIG.logoUrl,
+    faviconUrl: CONFIG.faviconUrl,
+    themePrimary: CONFIG.themePrimary,
+    themeSecondary: CONFIG.themeSecondary,
+    themeBg: CONFIG.themeBg
+  };
+  db.ref("vmc_config").update(globalConfig).catch(err => console.error("Cloud synced failure", err));
 }
 
 function loadConfigFromFirebase() {
   db.ref("vmc_config").once("value").then(snap => {
     if (snap.exists()) {
       Object.assign(CONFIG, snap.val());
+      loadLocalApiKeys();
       applySystemTheme();
       applySystemBranding();
       checkAllStatuses();
+    } else {
+      loadLocalApiKeys();
     }
-  }).catch(e => console.error("Connection fallback active"));
+  }).catch(e => {
+    console.error("Connection fallback active", e);
+    loadLocalApiKeys();
+  });
 }
 
 // ===== SPECTRAL SYNC =====
@@ -1433,7 +1466,10 @@ function renderCodeMailInbox() {
   
   list.innerHTML = filteredMails.map((mail, idx) => {
     const fromInitial = (mail.from || '?').charAt(0).toUpperCase();
-    const readClass = mail.read ? 'codemail-mail-read' : 'codemail-mail-unread';
+    
+    // Check local read status as well
+    const isRead = mail.read || (mail.id && JSON.parse(localStorage.getItem('vmc_read_mails') || '{}')[mail.id]);
+    const readClass = isRead ? 'codemail-mail-read' : 'codemail-mail-unread';
     const dateStr = mail.date ? new Date(mail.date).toLocaleString() : '--';
     const avatarSvg = generateLetterAvatar(mail.from || 'U');
     
@@ -1449,7 +1485,7 @@ function renderCodeMailInbox() {
           <div class="codemail-mail-preview">${escapeHtml((mail.preview || '').substring(0, 120))}${(mail.preview || '').length > 120 ? '...' : ''}</div>
           <span class="codemail-mail-account-badge">${mail.accountEmail}</span>
         </div>
-        ${!mail.read ? '<span class="codemail-unread-dot"></span>' : ''}
+        ${!isRead ? '<span class="codemail-unread-dot"></span>' : ''}
       </div>
     `;
   }).join('');
@@ -1477,11 +1513,11 @@ function openMailReader(index) {
   // Mark as read
   mail.read = true;
   
-  // Update in Firebase
+  // Update in localStorage
   if (mail.id && mail.accountEmail) {
-    const accKey = emailToKey(mail.accountEmail);
-    const cleanMailId = mail.id.replace(/[.#$\[\]\/]/g, '_');
-    db.ref(`codemail_inbox/${accKey}/${cleanMailId}/read`).set(true).catch(() => {});
+    const readMails = JSON.parse(localStorage.getItem('vmc_read_mails') || '{}');
+    readMails[mail.id] = true;
+    localStorage.setItem('vmc_read_mails', JSON.stringify(readMails));
   }
   
   // Show reader overlay
@@ -1553,25 +1589,22 @@ async function refreshCodeMailInbox() {
 }
 
 function saveCodeMailAccounts() {
-  codeMailAccounts.forEach(acc => {
-    const key = emailToKey(acc.email);
-    db.ref(`codemail_accounts/${key}`).set({
-      email: acc.email,
-      password: btoa(acc.password),
-      status: acc.status,
-      loginTime: Date.now()
-    }).catch(e => console.warn('Failed to save account:', e));
-  });
+  const dataToSave = codeMailAccounts.map(acc => ({
+    email: acc.email,
+    password: btoa(acc.password),
+    status: acc.status,
+    loginTime: Date.now()
+  }));
+  localStorage.setItem('vmc_codemail_accounts', JSON.stringify(dataToSave));
 }
 
 async function loadCodeMailAccounts() {
   try {
-    const snap = await db.ref('codemail_accounts').once('value');
-    if (snap.exists()) {
-      const data = snap.val();
+    const saved = localStorage.getItem('vmc_codemail_accounts');
+    if (saved) {
+      const data = JSON.parse(saved);
       const loaded = [];
-      Object.keys(data).forEach(key => {
-        const acc = data[key];
+      data.forEach(acc => {
         if (acc.email) {
           loaded.push({
             email: acc.email,
@@ -1798,6 +1831,14 @@ function openDomainSearchMail(idx) {
   
   const mail = matches[idx].mail;
   
+  // Mark as read
+  mail.read = true;
+  if (mail.id && mail.accountEmail) {
+    const readMails = JSON.parse(localStorage.getItem('vmc_read_mails') || '{}');
+    readMails[mail.id] = true;
+    localStorage.setItem('vmc_read_mails', JSON.stringify(readMails));
+  }
+  
   // Open the mail reader overlay
   const overlay = document.getElementById('codemail-reader-overlay');
   if (overlay) overlay.classList.remove('hidden');
@@ -1814,6 +1855,9 @@ function openDomainSearchMail(idx) {
       bodyEl.innerHTML = `<pre class="codemail-text-content">${escapeHtml(mail.body || mail.preview || 'No content available.')}</pre>`;
     }
   }
+  
+  // Re-render inbox to update read status
+  renderCodeMailInbox();
 }
 
 // Add Enter key listener for domain search
