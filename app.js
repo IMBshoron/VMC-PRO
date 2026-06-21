@@ -13,6 +13,22 @@ const firebaseConfig = {
 
 const fbApp = firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const auth = firebase.auth();
+
+// ===== AUTH CONFIG =====
+const AUTH_DOMAIN = '@vmctool.com';
+const ADMIN_USERNAME = 'Admin.Shoron';
+const ADMIN_EMAIL = ADMIN_USERNAME.toLowerCase() + AUTH_DOMAIN;
+let currentUser = null;
+let isAdmin = false;
+
+function usernameToEmail(username) {
+  return username.toLowerCase().trim() + AUTH_DOMAIN;
+}
+
+function emailToUsername(email) {
+  return email.replace(AUTH_DOMAIN, '');
+}
 
 // ===== SYSTEM REGISTRY STACK =====
 let CONFIG = {
@@ -54,20 +70,321 @@ const COUNTRIES = [
 // ===== KICKSTART THE SYSTEM =====
 document.addEventListener("DOMContentLoaded", () => {
   initParticles();
-  initStarsBg();
-  loadConfigFromFirebase();
-  loadClaimedEmails();
   initPreLoader();
-  initIntroSequence();
-  initProtocolSelector();
-  initManualProtocol();
-  initAutoProtocol();
-  initCodeMailProtocol();
-  initControlStation();
-  initHiddenTrigger();
-  checkAllStatuses();
-  updateApiUsageBar();
+
+  // Load remembered credentials
+  const remembered = localStorage.getItem('vmc_remember_user');
+  if (remembered) {
+    try {
+      const data = JSON.parse(remembered);
+      const loginUser = document.getElementById('login-username');
+      const loginPass = document.getElementById('login-password');
+      const rememberBox = document.getElementById('remember-me');
+      if (loginUser) loginUser.value = data.username || '';
+      if (loginPass) loginPass.value = data.password || '';
+      if (rememberBox) rememberBox.checked = true;
+    } catch(e) {}
+  }
+
+  // Listen for Enter key on auth inputs
+  ['login-username', 'login-password'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+  });
+  ['signup-username', 'signup-password', 'signup-confirm'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') handleSignup(); });
+  });
+
+  // Firebase Auth state observer
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      currentUser = user;
+      isAdmin = (user.email === ADMIN_EMAIL);
+      const username = emailToUsername(user.email);
+      
+      // Store username in database
+      await db.ref(`users/${user.uid}/username`).set(username);
+      
+      // Show user badge in header
+      const badge = document.getElementById('header-user-badge');
+      if (badge) badge.textContent = '👤 ' + username.toUpperCase();
+      
+      // Show/hide admin users tab
+      const usersTab = document.getElementById('admin-users-tab-btn');
+      if (usersTab) usersTab.style.display = isAdmin ? '' : 'none';
+      
+      // Load user's API key from Firebase
+      await loadUserApiKey(user.uid);
+      
+      // Transition from auth to dashboard
+      transitionToDashboard();
+    } else {
+      currentUser = null;
+      isAdmin = false;
+      showAuthScreen();
+    }
+  });
 });
+
+// ===== AUTH SCREEN FUNCTIONS =====
+function switchAuthTab(tab) {
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  const loginTab = document.getElementById('login-tab-btn');
+  const signupTab = document.getElementById('signup-tab-btn');
+  
+  if (tab === 'login') {
+    loginForm.classList.remove('hidden');
+    signupForm.classList.add('hidden');
+    loginTab.classList.add('active');
+    signupTab.classList.remove('active');
+  } else {
+    loginForm.classList.add('hidden');
+    signupForm.classList.remove('hidden');
+    loginTab.classList.remove('active');
+    signupTab.classList.add('active');
+  }
+}
+
+async function handleLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+  
+  if (!username || !password) {
+    errorEl.textContent = 'USERNAME AND PASSWORD REQUIRED';
+    return;
+  }
+  
+  errorEl.textContent = '';
+  btn.disabled = true;
+  btn.querySelector('.auth-btn-text').textContent = 'AUTHENTICATING...';
+  
+  const email = usernameToEmail(username);
+  
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    
+    // Handle remember me
+    const rememberMe = document.getElementById('remember-me').checked;
+    if (rememberMe) {
+      localStorage.setItem('vmc_remember_user', JSON.stringify({ username, password }));
+    } else {
+      localStorage.removeItem('vmc_remember_user');
+    }
+  } catch (err) {
+    let msg = 'LOGIN FAILED';
+    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') msg = 'INVALID USERNAME OR PASSWORD';
+    else if (err.code === 'auth/wrong-password') msg = 'INCORRECT PASSWORD';
+    else if (err.code === 'auth/too-many-requests') msg = 'TOO MANY ATTEMPTS. TRY LATER';
+    errorEl.textContent = msg;
+    btn.disabled = false;
+    btn.querySelector('.auth-btn-text').textContent = 'INITIALIZE LOGIN';
+  }
+}
+
+async function handleSignup() {
+  const username = document.getElementById('signup-username').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const confirm = document.getElementById('signup-confirm').value;
+  const errorEl = document.getElementById('signup-error');
+  const btn = document.getElementById('signup-btn');
+  
+  if (!username || !password) {
+    errorEl.textContent = 'ALL FIELDS REQUIRED';
+    return;
+  }
+  if (username.length < 3) {
+    errorEl.textContent = 'USERNAME MUST BE AT LEAST 3 CHARACTERS';
+    return;
+  }
+  if (password.length < 6) {
+    errorEl.textContent = 'PASSWORD MUST BE AT LEAST 6 CHARACTERS';
+    return;
+  }
+  if (password !== confirm) {
+    errorEl.textContent = 'PASSWORDS DO NOT MATCH';
+    return;
+  }
+  
+  errorEl.textContent = '';
+  btn.disabled = true;
+  btn.querySelector('.auth-btn-text').textContent = 'CREATING ACCOUNT...';
+  
+  const email = usernameToEmail(username);
+  
+  try {
+    await auth.createUserWithEmailAndPassword(email, password);
+  } catch (err) {
+    let msg = 'SIGNUP FAILED';
+    if (err.code === 'auth/email-already-in-use') msg = 'USERNAME ALREADY TAKEN';
+    else if (err.code === 'auth/weak-password') msg = 'PASSWORD TOO WEAK (MIN 6 CHARS)';
+    errorEl.textContent = msg;
+    btn.disabled = false;
+    btn.querySelector('.auth-btn-text').textContent = 'CREATE ACCOUNT';
+  }
+}
+
+function handleLogout() {
+  localStorage.removeItem('vmc_remember_user');
+  auth.signOut();
+}
+
+function showAuthScreen() {
+  const authScreen = document.getElementById('auth-screen');
+  const mainApp = document.getElementById('main-app');
+  if (authScreen) {
+    authScreen.classList.remove('fade-out');
+    authScreen.style.display = 'flex';
+  }
+  if (mainApp) mainApp.classList.add('hidden');
+}
+
+function transitionToDashboard() {
+  const authScreen = document.getElementById('auth-screen');
+  const mainApp = document.getElementById('main-app');
+  
+  if (authScreen) {
+    authScreen.classList.add('fade-out');
+    setTimeout(() => {
+      authScreen.style.display = 'none';
+      if (mainApp) {
+        mainApp.classList.remove('hidden');
+        const particleEl = document.getElementById('particles-js');
+        if (particleEl) particleEl.style.pointerEvents = 'auto';
+      }
+      // Initialize dashboard systems after auth
+      loadConfigFromFirebase();
+      loadClaimedEmails();
+      initProtocolSelector();
+      initManualProtocol();
+      initAutoProtocol();
+      initCodeMailProtocol();
+      initControlStation();
+      initHiddenTrigger();
+      checkAllStatuses();
+      updateApiUsageBar();
+    }, 800);
+  }
+}
+
+// ===== USER API KEY MANAGEMENT =====
+async function loadUserApiKey(uid) {
+  try {
+    const snap = await db.ref(`users/${uid}/api_key`).once('value');
+    if (snap.exists()) {
+      const apiKey = snap.val();
+      CONFIG.serpApiKey = apiKey;
+      localStorage.setItem('vmc_serpApiKey', apiKey);
+    }
+  } catch(e) {
+    console.warn('Failed to load user API key', e);
+  }
+}
+
+async function saveUserApiKey(apiKey) {
+  if (!currentUser) return;
+  try {
+    await db.ref(`users/${currentUser.uid}/api_key`).set(apiKey);
+  } catch(e) {
+    console.warn('Failed to save user API key', e);
+  }
+}
+
+// ===== ADMIN USER MANAGEMENT =====
+async function adminAddUser() {
+  if (!isAdmin) return showPremiumToast('ADMIN ACCESS REQUIRED', 'error');
+  
+  const username = document.getElementById('admin-new-username').value.trim();
+  const password = document.getElementById('admin-new-password').value;
+  
+  if (!username || !password) return showPremiumToast('USERNAME AND PASSWORD REQUIRED', 'error');
+  if (password.length < 6) return showPremiumToast('PASSWORD MUST BE AT LEAST 6 CHARACTERS', 'error');
+  
+  const email = usernameToEmail(username);
+  
+  try {
+    // Save current user credentials to re-login admin after creating new user
+    const adminEmail = currentUser.email;
+    const adminCredential = localStorage.getItem('vmc_remember_user');
+    
+    // Create new user (this will sign in as the new user)
+    const result = await auth.createUserWithEmailAndPassword(email, password);
+    
+    // Store username in database
+    await db.ref(`users/${result.user.uid}/username`).set(username);
+    
+    // Sign back in as admin
+    if (adminCredential) {
+      const cred = JSON.parse(adminCredential);
+      await auth.signInWithEmailAndPassword(usernameToEmail(cred.username), cred.password);
+    } else {
+      // Fallback: try to sign back with known admin creds
+      await auth.signInWithEmailAndPassword(ADMIN_EMAIL, '0188283');
+    }
+    
+    document.getElementById('admin-new-username').value = '';
+    document.getElementById('admin-new-password').value = '';
+    showPremiumToast(`User "${username}" created successfully!`, 'success');
+    loadAdminUserList();
+  } catch(err) {
+    let msg = 'FAILED TO CREATE USER';
+    if (err.code === 'auth/email-already-in-use') msg = 'USERNAME ALREADY EXISTS';
+    showPremiumToast(msg, 'error');
+  }
+}
+
+async function adminRemoveUser(uid, username) {
+  if (!isAdmin) return;
+  if (!confirm(`Remove user "${username}"? This will delete their data.`)) return;
+  
+  try {
+    // Remove user data from database
+    await db.ref(`users/${uid}`).remove();
+    showPremiumToast(`User "${username}" data removed`, 'success');
+    loadAdminUserList();
+  } catch(e) {
+    showPremiumToast('Failed to remove user', 'error');
+  }
+}
+
+async function loadAdminUserList() {
+  if (!isAdmin) return;
+  const listEl = document.getElementById('admin-users-list');
+  if (!listEl) return;
+  
+  try {
+    const snap = await db.ref('users').once('value');
+    if (!snap.exists()) {
+      listEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">No users found</p>';
+      return;
+    }
+    
+    const users = snap.val();
+    listEl.innerHTML = Object.keys(users).map(uid => {
+      const user = users[uid];
+      const uname = user.username || 'Unknown';
+      const initial = uname.charAt(0).toUpperCase();
+      const isAdminUser = (uname.toLowerCase() === ADMIN_USERNAME.toLowerCase());
+      const badgeHtml = isAdminUser ? '<span class="admin-user-badge">ADMIN</span>' : '';
+      const removeBtn = !isAdminUser ? `<button class="admin-user-remove" onclick="adminRemoveUser('${uid}','${uname}')">REMOVE</button>` : '';
+      
+      return `
+        <div class="admin-user-item">
+          <div class="admin-user-info">
+            <div class="admin-user-avatar">${initial}</div>
+            <span class="admin-user-name">${uname}${badgeHtml}</span>
+          </div>
+          ${removeBtn}
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = '<p style="color:var(--danger);font-size:11px;">Failed to load users</p>';
+  }
+}
 
 // ===== CHROMATIC STARFIELD =====
 function initStarsBg() {
@@ -792,6 +1109,13 @@ function initControlStation() {
     });
   });
 
+  const usersTabBtn = document.getElementById('admin-users-tab-btn');
+  if (usersTabBtn) {
+    usersTabBtn.addEventListener('click', () => {
+      loadAdminUserList();
+    });
+  }
+
   const closeBtn = document.getElementById("admin-close");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
@@ -802,7 +1126,7 @@ function initControlStation() {
   // Save actions
   const saveApi = document.getElementById("save-api-keys");
   if (saveApi) {
-    saveApi.addEventListener("click", () => {
+    saveApi.addEventListener("click", async () => {
       const serpVal = document.getElementById("admin-serp-key").value;
       const gravatarVal = document.getElementById("admin-gravatar-key").value;
       const imgbbVal = document.getElementById("admin-imgbb-key").value;
@@ -815,7 +1139,10 @@ function initControlStation() {
       CONFIG.gravatarApiKey = gravatarVal;
       CONFIG.imgbbApiKey = imgbbVal;
       
-      showPremiumToast("Security credentials successfully saved in browser", "success");
+      // Save specific user API key to Firebase
+      await saveUserApiKey(serpVal);
+      
+      showPremiumToast("Security credentials successfully saved in browser and database", "success");
       checkAllStatuses();
       updateApiUsageBar();
     });
