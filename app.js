@@ -41,11 +41,19 @@ let CONFIG = {
   faviconUrl: "",
   themePrimary: "#00f3ff",
   themeSecondary: "#ff007b",
-  themeBg: "#03030d"
+  themeBg: "#03030d",
+  // API mode: "individual" (each user uses their own key) | "global" (all use admin's shared key)
+  apiMode: "individual",
+  globalSerpApiKey: ""
 };
 
 let validEmails = [];
 let claimedEmails = {}; // { email: timestamp }
+
+// Per-user state loaded from Firebase
+let USER_API_KEY = "";        // current user's personal SerpAPI key (Individual mode)
+let USAGE_BAR_INTERVAL = null; // interval handle for live quota polling
+let LAST_USAGE_BEFORE_SCRAPE = null; // for "+N used just now" indicator
 
 // ===== WORLD GEOGRAPHIC RECORDS =====
 const COUNTRIES = [
@@ -113,6 +121,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Show/hide admin users tab
       const usersTab = document.getElementById('admin-users-tab-btn');
       if (usersTab) usersTab.style.display = isAdmin ? '' : 'none';
+      // Show/hide admin-only controls (mode toggle, global key) based on role
+      updateAdminOnlyControls();
       
       // Load user's API key from Firebase
       await loadUserApiKey(user.uid);
@@ -264,23 +274,32 @@ function transitionToDashboard() {
       initCodeMailProtocol();
       initControlStation();
       initHiddenTrigger();
+      // Wire up live mode/key listeners (must run after auth so currentUser is set)
+      initApiKeyListeners();
       checkAllStatuses();
       updateApiUsageBar();
+      startUsageBarAutoRefresh();
     }, 800);
   }
 }
 
 // ===== USER API KEY MANAGEMENT =====
+// NOTE: We no longer cache the SerpAPI key in localStorage. localStorage is
+// browser-wide and shared across all users on a device, which previously caused
+// a new user to silently inherit the previous user's exhausted/stale key.
+// The active key is now resolved deterministically from Firebase per session.
+
 async function loadUserApiKey(uid) {
   try {
     const snap = await db.ref(`users/${uid}/api_key`).once('value');
-    if (snap.exists()) {
-      const apiKey = snap.val();
-      CONFIG.serpApiKey = apiKey;
-      localStorage.setItem('vmc_serpApiKey', apiKey);
-    }
+    USER_API_KEY = snap.exists() ? (snap.val() || "") : "";
+    // Keep CONFIG.serpApiKey in sync with the currently resolved key
+    await refreshActiveApiKey();
+    // Reflect in the admin panel field (if open)
+    syncApiKeyFieldWithValue();
   } catch(e) {
     console.warn('Failed to load user API key', e);
+    USER_API_KEY = "";
   }
 }
 
@@ -288,8 +307,140 @@ async function saveUserApiKey(apiKey) {
   if (!currentUser) return;
   try {
     await db.ref(`users/${currentUser.uid}/api_key`).set(apiKey);
+    USER_API_KEY = apiKey;
   } catch(e) {
     console.warn('Failed to save user API key', e);
+  }
+}
+
+// Resolve which SerpAPI key is currently authoritative based on the admin mode.
+// Global mode -> the shared admin key from vmc_config/globalSerpApiKey
+// Individual mode -> the signed-in user's personal key (fallback to admin's
+//   shared key only if the admin themselves hasn't set a personal key yet).
+async function resolveActiveApiKey() {
+  const mode = (CONFIG.apiMode || "individual").toLowerCase();
+  if (mode === "global") {
+    return CONFIG.globalSerpApiKey || "";
+  }
+  // Individual mode
+  if (USER_API_KEY) return USER_API_KEY;
+  // Admin without a personal key may fall back to the global key
+  if (isAdmin) return CONFIG.globalSerpApiKey || CONFIG.serpApiKey || "";
+  return "";
+}
+
+// Refresh CONFIG.serpApiKey (the value actually used by executeAutoSearch)
+// to match the resolved key, then refresh the usage bar + monitors.
+async function refreshActiveApiKey() {
+  CONFIG.serpApiKey = await resolveActiveApiKey();
+  updateApiUsageBar();
+  checkAllStatuses();
+}
+
+// Keep the admin-panel API key input in sync with whichever key is active,
+// depending on the current mode and the viewer's role.
+function syncApiKeyFieldWithValue() {
+  const field = document.getElementById('admin-serp-key');
+  if (!field) return;
+  const mode = (CONFIG.apiMode || "individual").toLowerCase();
+  if (mode === 'global') {
+    // Show the shared global key to everyone, but lock it for non-admins
+    field.value = CONFIG.globalSerpApiKey || "";
+    if (isAdmin) {
+      field.removeAttribute('readonly');
+      field.classList.remove('admin-input-locked');
+    } else {
+      field.setAttribute('readonly', 'readonly');
+      field.classList.add('admin-input-locked');
+    }
+  } else {
+    // Individual mode: each user edits their own personal key
+    field.value = USER_API_KEY || "";
+    field.removeAttribute('readonly');
+    field.classList.remove('admin-input-locked');
+  }
+  updateGlobalKeyBanner();
+}
+
+// Live Firebase listeners so a mode flip / key change by the admin propagates
+// to every signed-in client in real time.
+function initApiKeyListeners() {
+  // Mode changes
+  db.ref('vmc_config/apiMode').on('value', async (snap) => {
+    const newMode = snap.exists() ? (snap.val() || 'individual') : 'individual';
+    const changed = (newMode !== CONFIG.apiMode);
+    CONFIG.apiMode = newMode;
+    syncApiKeyFieldWithValue();
+    updateModeToggleUI();
+    await refreshActiveApiKey();
+    if (changed) {
+      showPremiumToast(`API mode switched to ${newMode.toUpperCase()}`, 'info');
+    }
+  });
+
+  // Global key changes
+  db.ref('vmc_config/globalSerpApiKey').on('value', async (snap) => {
+    CONFIG.globalSerpApiKey = snap.exists() ? (snap.val() || "") : "";
+    syncApiKeyFieldWithValue();
+    await refreshActiveApiKey();
+  });
+
+  // Current user's personal key changes (e.g. saved from another device)
+  if (currentUser) {
+    db.ref(`users/${currentUser.uid}/api_key`).on('value', async (snap) => {
+      USER_API_KEY = snap.exists() ? (snap.val() || "") : "";
+      syncApiKeyFieldWithValue();
+      await refreshActiveApiKey();
+    });
+  }
+}
+
+// Update the segmented mode-toggle UI to reflect CONFIG.apiMode
+function updateModeToggleUI() {
+  const mode = (CONFIG.apiMode || "individual").toLowerCase();
+  document.querySelectorAll('.api-mode-option').forEach(opt => {
+    opt.classList.toggle('active', opt.dataset.mode === mode);
+  });
+  // Show/hide the global-key banner + read-only lock
+  updateGlobalKeyBanner();
+}
+
+// Show or hide the "GLOBAL KEY IN USE" banner based on current mode/role
+function updateGlobalKeyBanner() {
+  const banner = document.getElementById('global-key-banner');
+  if (!banner) return;
+  const mode = (CONFIG.apiMode || "individual").toLowerCase();
+  if (mode === 'global') {
+    banner.classList.remove('hidden');
+    const lockNote = banner.querySelector('.global-key-banner-note');
+    if (lockNote) {
+      lockNote.textContent = isAdmin
+        ? 'Global mode active — your key is shared across all accounts.'
+        : 'Global mode active — managed by administrator. Read-only.';
+    }
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+// Toggle admin-only controls (the mode toggle is admin-only)
+function updateAdminOnlyControls() {
+  const modeToggleWrap = document.getElementById('api-mode-toggle-wrap');
+  if (modeToggleWrap) {
+    modeToggleWrap.style.display = isAdmin ? '' : 'none';
+  }
+}
+
+// Switch the API mode (admin action). Persists to Firebase; the listener
+// propagates the change to all clients.
+async function setApiMode(mode) {
+  if (!isAdmin) return showPremiumToast('ADMIN ACCESS REQUIRED', 'error');
+  if (mode !== 'global' && mode !== 'individual') return;
+  try {
+    await db.ref('vmc_config/apiMode').set(mode);
+    // updateModeToggleUI + refresh happen via the Firebase listener
+  } catch(e) {
+    showPremiumToast('Failed to switch API mode', 'error');
   }
 }
 
@@ -675,9 +826,20 @@ async function executeAutoSearch() {
   showProgressTrack("SPINNING SERPAPI SEARCH THREADS...");
 
   try {
+    // Always resolve the freshest key right before scraping. This fixes the
+    // bug where new users scraped with a stale/exhausted key from localStorage.
+    CONFIG.serpApiKey = await resolveActiveApiKey();
+
     if (!CONFIG.serpApiKey) {
-      throw new Error("SerpAPI configuration missing or expired limit.");
+      triggerLimitAlert("SerpAPI");
+      throw new Error("No SerpAPI key configured. " +
+        (CONFIG.apiMode === 'global'
+          ? "Ask the admin to set the Global API key."
+          : "Open the System Control Station and add your API key."));
     }
+
+    // Capture starting quota so we can show "+N used just now" afterwards
+    LAST_USAGE_BEFORE_SCRAPE = await fetchSerpUsageQuiet();
 
     let uniqueEmails = new Set();
     let allExtractedBlocks = "";
@@ -765,11 +927,18 @@ async function executeAutoSearch() {
 
     showPremiumToast(`Found ${emails.length} email(s). Running validation & avatar scan...`, "info");
     processValidationQueue(emails, `Auto: ${queryName}`);
-    updateApiUsageBar();
+    // Refresh the bar; show "+N used just now" based on quota delta
+    await updateApiUsageBar(true);
   } catch (err) {
     hideProgressTrack();
-    showPremiumToast(err.message, "error");
-    if (err.message.includes("limit") || err.message.includes("key") || err.message.includes("API")) {
+    const msg = (err && err.message) ? err.message : "Search failed.";
+    showPremiumToast(msg, "error");
+    // Surface a modal for any error that looks key/quota/network related so
+    // failures are never silently swallowed (root cause of "scraping not working").
+    const low = msg.toLowerCase();
+    if (low.includes("limit") || low.includes("key") || low.includes("api") ||
+        low.includes("credential") || low.includes("quota") || low.includes("proxy") ||
+        low.includes("network") || low.includes("exhausted")) {
       triggerLimitAlert("SerpAPI");
     }
   }
@@ -1127,26 +1296,54 @@ function initControlStation() {
   const saveApi = document.getElementById("save-api-keys");
   if (saveApi) {
     saveApi.addEventListener("click", async () => {
-      const serpVal = document.getElementById("admin-serp-key").value;
+      const serpVal = document.getElementById("admin-serp-key").value.trim();
       const gravatarVal = document.getElementById("admin-gravatar-key").value;
       const imgbbVal = document.getElementById("admin-imgbb-key").value;
-      
-      localStorage.setItem("vmc_serpApiKey", serpVal);
+
       localStorage.setItem("vmc_gravatarApiKey", gravatarVal);
       localStorage.setItem("vmc_imgbbApiKey", imgbbVal);
-      
-      CONFIG.serpApiKey = serpVal;
       CONFIG.gravatarApiKey = gravatarVal;
       CONFIG.imgbbApiKey = imgbbVal;
-      
-      // Save specific user API key to Firebase
-      await saveUserApiKey(serpVal);
-      
-      showPremiumToast("Security credentials successfully saved in browser and database", "success");
-      checkAllStatuses();
-      updateApiUsageBar();
+
+      const mode = (CONFIG.apiMode || "individual").toLowerCase();
+
+      // SerpAPI key is routed based on the active mode:
+      //  - GLOBAL:     admin writes the shared key to vmc_config/globalSerpApiKey
+      //                (the listener propagates it to all clients). Non-admins
+      //                are blocked by the read-only lock and cannot reach here.
+      //  - INDIVIDUAL: the key is saved to the signed-in user's own node.
+      if (mode === 'global') {
+        if (!isAdmin) {
+          return showPremiumToast("GLOBAL KEY is managed by the administrator", "error");
+        }
+        try {
+          await db.ref("vmc_config/globalSerpApiKey").set(serpVal);
+        } catch(e) {
+          return showPremiumToast("Failed to save global API key", "error");
+        }
+      } else {
+        await saveUserApiKey(serpVal);
+      }
+
+      // Re-resolve the active key (config.serpApiKey) and refresh UI
+      await refreshActiveApiKey();
+
+      showPremiumToast(
+        mode === 'global'
+          ? "Global API key synchronized across all accounts"
+          : "API key saved to your account",
+        "success"
+      );
     });
   }
+
+  // Mode toggle handlers (admin-only segmented control)
+  document.querySelectorAll('.api-mode-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      if (!isAdmin) return showPremiumToast('ADMIN ACCESS REQUIRED', 'error');
+      setApiMode(opt.dataset.mode);
+    });
+  });
 
   const saveTheme = document.getElementById("save-theme");
   if (saveTheme) {
@@ -1207,8 +1404,10 @@ function initHiddenTrigger() {
 function launchControlStation() {
   const overlay = document.getElementById("admin-overlay");
   if (overlay) overlay.classList.remove("hidden");
-  
-  document.getElementById("admin-serp-key").value = CONFIG.serpApiKey;
+
+  // SerpAPI field is mode-aware (global -> shared key, individual -> user key)
+  syncApiKeyFieldWithValue();
+  updateModeToggleUI();
   document.getElementById("admin-gravatar-key").value = CONFIG.gravatarApiKey;
   document.getElementById("admin-imgbb-key").value = CONFIG.imgbbApiKey;
   document.getElementById("theme-primary").value = CONFIG.themePrimary;
@@ -1216,6 +1415,9 @@ function launchControlStation() {
   document.getElementById("theme-bg").value = CONFIG.themeBg;
   document.getElementById("brand-name").value = CONFIG.siteName;
   document.getElementById("brand-dev").value = CONFIG.devName;
+
+  // Refresh the in-panel quota mini-card
+  updatePanelQuotaCard();
 }
 
 // ===== IMGBB UPLOAD LAYER =====
@@ -1307,12 +1509,13 @@ function triggerLimitAlert(serviceName) {
 }
 
 // ===== PERSISTENCY STATE =====
+// NOTE: SerpAPI key is intentionally NOT stored in localStorage. It was
+// previously cached browser-wide and shared across all users on a device,
+// causing new users to silently inherit a stale/exhausted key. The active key
+// is now resolved per-session via resolveActiveApiKey().
 function loadLocalApiKeys() {
-  const localSerp = localStorage.getItem("vmc_serpApiKey");
   const localGravatar = localStorage.getItem("vmc_gravatarApiKey");
   const localImgbb = localStorage.getItem("vmc_imgbbApiKey");
-  
-  if (localSerp !== null) CONFIG.serpApiKey = localSerp;
   if (localGravatar !== null) CONFIG.gravatarApiKey = localGravatar;
   if (localImgbb !== null) CONFIG.imgbbApiKey = localImgbb;
 }
@@ -1331,19 +1534,35 @@ function saveGlobalRegistry() {
 }
 
 function loadConfigFromFirebase() {
-  db.ref("vmc_config").once("value").then(snap => {
+  db.ref("vmc_config").once("value").then(async snap => {
     if (snap.exists()) {
-      Object.assign(CONFIG, snap.val());
+      const remote = snap.val();
+      // Merge only safe fields. We deliberately do NOT blindly Object.assign
+      // a remote `serpApiKey` over CONFIG, because the active key must be
+      // resolved via resolveActiveApiKey() (mode-aware). We do read the
+      // apiMode + globalSerpApiKey fields that drive that resolution.
+      const safeFields = [
+        'siteName','devName','logoUrl','faviconUrl',
+        'themePrimary','themeSecondary','themeBg',
+        'apiMode','globalSerpApiKey'
+      ];
+      safeFields.forEach(k => {
+        if (remote[k] !== undefined) CONFIG[k] = remote[k];
+      });
       loadLocalApiKeys();
       applySystemTheme();
       applySystemBranding();
-      checkAllStatuses();
+      syncApiKeyFieldWithValue();
+      updateModeToggleUI();
+      await refreshActiveApiKey();
     } else {
       loadLocalApiKeys();
+      await refreshActiveApiKey();
     }
-  }).catch(e => {
+  }).catch(async e => {
     console.error("Connection fallback active", e);
     loadLocalApiKeys();
+    await refreshActiveApiKey();
   });
 }
 
@@ -1393,38 +1612,166 @@ function showPremiumToast(text, type = "info") {
   setTimeout(() => toast.remove(), 4200);
 }
 
-// ===== API USAGE BAR =====
-async function updateApiUsageBar() {
-  if (!CONFIG.serpApiKey) {
-    setUsageBar(0, 'NO KEY');
-    return;
-  }
-  const endpoint = `https://serpapi.com/account.json?api_key=${CONFIG.serpApiKey}`;
+// ===== API USAGE BAR (real-time, cross-account, mode-aware) =====
+// The bar always reflects the quota of the currently RESOLVED key, so in
+// GLOBAL mode every account sees the same shared quota, and in INDIVIDUAL
+// mode each account sees its own.
+
+// Quietly fetch the SerpAPI usage object for the active key (no UI side effects).
+// Returns null on failure.
+async function fetchSerpUsageQuiet() {
+  const key = await resolveActiveApiKey();
+  if (!key) return null;
+  const endpoint = `https://serpapi.com/account.json?api_key=${key}`;
   try {
     const data = await fetchWithCorsProxy(endpoint);
-    const left = data.total_searches_left !== undefined ? data.total_searches_left : (data.plan_searches_left !== undefined ? data.plan_searches_left : 0);
+    if (data && data.error) return null;
+    const left = data.total_searches_left !== undefined
+      ? data.total_searches_left
+      : (data.plan_searches_left !== undefined ? data.plan_searches_left : 0);
     const total = data.plan_monthly_searches || (left + (data.this_month_usage || 0)) || 250;
     const used = total - left;
-    const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((left / total) * 100))) : 0;
-    setUsageBar(pct, `${used}/${total}(${left}) search remaining`);
+    return { left, total, used, raw: data };
   } catch (err) {
-    console.error("Failed to load API usage info", err);
-    setUsageBar(0, 'OFFLINE');
+    return null;
   }
 }
 
-function setUsageBar(pct, label) {
+// Main entry: refresh the header usage bar. Pass `true` after a scrape to show
+// the "+N used just now" delta indicator.
+async function updateApiUsageBar(showDelta = false) {
+  const activeKey = await resolveActiveApiKey();
+
+  if (!activeKey) {
+    setUsageBar({ pct: 0, left: 0, total: 0, used: 0, state: 'no-key' });
+    updatePanelQuotaCard({ state: 'no-key' });
+    return;
+  }
+
+  const usage = await fetchSerpUsageQuiet();
+  if (!usage) {
+    setUsageBar({ pct: 0, state: 'offline' });
+    updatePanelQuotaCard({ state: 'offline' });
+    return;
+  }
+
+  // Fill represents REMAINING quota (a fuller bar = healthier quota)
+  const pct = usage.total > 0
+    ? Math.min(100, Math.max(0, Math.round((usage.left / usage.total) * 100)))
+    : 0;
+
+  // Compute "+N used just now" if requested and we have a baseline
+  let delta = 0;
+  if (showDelta && LAST_USAGE_BEFORE_SCRAPE && usage.total === LAST_USAGE_BEFORE_SCRAPE.total) {
+    delta = Math.max(0, usage.used - LAST_USAGE_BEFORE_SCRAPE.used);
+  }
+  LAST_USAGE_BEFORE_SCRAPE = null; // consume
+
+  setUsageBar({
+    pct, left: usage.left, total: usage.total, used: usage.used, state: 'ok', delta
+  });
+  updatePanelQuotaCard({ pct, left: usage.left, total: usage.total, used: usage.used, state: 'ok' });
+}
+
+// Render the header usage bar. Accepts a state object so the markup stays rich.
+function setUsageBar({ pct = 0, left = 0, total = 0, used = 0, state = 'ok', delta = 0 }) {
   const fill = document.getElementById('api-usage-fill');
   const txt = document.getElementById('api-usage-text');
+  const modeBadge = document.getElementById('api-usage-mode');
+  const numEl = document.getElementById('api-usage-numbers');
+  const deltaEl = document.getElementById('api-usage-delta');
+  const track = document.querySelector('.usage-track');
+
+  // Fill width + color band based on remaining quota
   if (fill) {
     fill.style.width = pct + '%';
-    if (pct < 20) {
-      fill.style.background = 'linear-gradient(90deg, var(--danger), var(--warning))';
+    fill.classList.remove('usage-low', 'usage-mid', 'usage-high');
+    if (pct < 20) fill.classList.add('usage-low');
+    else if (pct < 50) fill.classList.add('usage-mid');
+    else fill.classList.add('usage-high');
+  }
+  // Pulse animation on track while live
+  if (track) track.classList.add('usage-live');
+
+  // Mode badge
+  if (modeBadge) {
+    const mode = (CONFIG.apiMode || 'individual').toLowerCase();
+    modeBadge.textContent = mode === 'global' ? '🌐 GLOBAL' : '👤 INDIVIDUAL';
+    modeBadge.classList.toggle('mode-global', mode === 'global');
+    modeBadge.classList.toggle('mode-individual', mode !== 'global');
+  }
+
+  // Numeric readout + status text
+  const fmt = (n) => Number(n).toLocaleString();
+  if (state === 'no-key') {
+    if (txt) txt.textContent = 'NO API KEY';
+    if (numEl) numEl.textContent = '— / —';
+  } else if (state === 'offline') {
+    if (txt) txt.textContent = 'QUOTA OFFLINE';
+    if (numEl) numEl.textContent = '— / —';
+  } else {
+    if (txt) txt.textContent = `${pct}% REMAINING`;
+    if (numEl) numEl.textContent = `${fmt(left)} / ${fmt(total)} LEFT`;
+  }
+
+  // "+N used just now" micro-indicator
+  if (deltaEl) {
+    if (delta > 0) {
+      deltaEl.textContent = `+${delta} used`;
+      deltaEl.classList.add('visible');
+      setTimeout(() => deltaEl.classList.remove('visible'), 5000);
     } else {
-      fill.style.background = 'linear-gradient(90deg, var(--primary), var(--secondary))';
+      deltaEl.classList.remove('visible');
     }
   }
-  if (txt) txt.textContent = label;
+}
+
+// Auto-refresh the bar on a 60s interval for live, accurate results.
+function startUsageBarAutoRefresh() {
+  if (USAGE_BAR_INTERVAL) clearInterval(USAGE_BAR_INTERVAL);
+  USAGE_BAR_INTERVAL = setInterval(() => {
+    updateApiUsageBar(false).catch(() => {});
+  }, 60000);
+}
+
+// Live quota mini-card rendered inside the Admin Panel (API INTERFACES tab).
+function updatePanelQuotaCard(data) {
+  const card = document.getElementById('panel-quota-card');
+  if (!card) return;
+  const bar = document.getElementById('panel-quota-fill');
+  const nums = document.getElementById('panel-quota-numbers');
+  const status = document.getElementById('panel-quota-status');
+  const state = data?.state || 'loading';
+
+  const fmt = (n) => Number(n || 0).toLocaleString();
+
+  if (state === 'no-key') {
+    card.classList.remove('hidden');
+    if (bar) bar.style.width = '0%';
+    if (nums) nums.textContent = 'No API key configured';
+    if (status) { status.textContent = '⚠ NO KEY'; status.className = 'panel-quota-status warn'; }
+    return;
+  }
+  if (state === 'offline') {
+    card.classList.remove('hidden');
+    if (nums) nums.textContent = 'Unable to reach SerpAPI';
+    if (status) { status.textContent = '◐ OFFLINE'; status.className = 'panel-quota-status warn'; }
+    return;
+  }
+
+  card.classList.remove('hidden');
+  if (bar) {
+    bar.style.width = (data.pct || 0) + '%';
+    bar.classList.remove('usage-low', 'usage-mid', 'usage-high');
+    if (data.pct < 20) bar.classList.add('usage-low');
+    else if (data.pct < 50) bar.classList.add('usage-mid');
+    else bar.classList.add('usage-high');
+  }
+  if (nums) nums.textContent = `${fmt(data.left)} / ${fmt(data.total)} searches left`;
+  if (status) {
+    status.textContent = `${data.pct || 0}% remaining`;
+    status.className = 'panel-quota-status ' + (data.pct < 20 ? 'danger' : 'ok');
+  }
 }
 
 // ===== CLAIMED EMAILS SYSTEM (60-DAY DATABASE) =====

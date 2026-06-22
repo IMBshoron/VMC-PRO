@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Montserrat:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=2.0">
+  <link rel="stylesheet" href="style.css?v=3.0">
   <link rel="icon" id="dynamic-favicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
 </head>
 <body>
@@ -231,10 +231,14 @@
     <div class="api-usage-bar">
       <div class="usage-inner">
         <div class="usage-label"><span class="usage-icon">⚡</span> API CREDITS</div>
+        <span class="usage-mode-badge" id="api-usage-mode">👤 INDIVIDUAL</span>
         <div class="usage-track">
           <div class="usage-fill" id="api-usage-fill"></div>
+          <div class="usage-shimmer"></div>
         </div>
+        <span class="usage-numbers" id="api-usage-numbers">— / —</span>
         <span class="usage-text" id="api-usage-text">Loading...</span>
+        <span class="usage-delta" id="api-usage-delta"></span>
       </div>
     </div>
 
@@ -586,21 +590,69 @@
       <span class="tech-accent border-tr"></span>
       <span class="tech-accent border-bl"></span>
       <span class="tech-accent border-br"></span>
-      
+      <div class="admin-panel-glow"></div>
+
       <div class="admin-header">
-        <h2>🛠️ SYSTEM CONTROL STATION</h2>
-        <button id="admin-close" class="admin-close-btn">CLOSE CONSOLE</button>
+        <div class="admin-header-left">
+          <div class="admin-header-icon">🛠️</div>
+          <div>
+            <h2>SYSTEM CONTROL STATION</h2>
+            <span class="admin-header-sub">Premium Command Console</span>
+          </div>
+        </div>
+        <div class="admin-header-right">
+          <span class="admin-status-chip" id="admin-status-chip"><span class="admin-status-dot"></span>SECURE</span>
+          <button id="admin-close" class="admin-close-btn">CLOSE CONSOLE</button>
+        </div>
       </div>
-      
+
       <div class="admin-body">
         <div class="admin-tabs">
-          <button class="admin-tab active" data-admin-tab="api-tab">API INTERFACES</button>
-          <button class="admin-tab" data-admin-tab="theme-tab">THEME DESIGN</button>
-          <button class="admin-tab" data-admin-tab="brand-tab">BRAND PROTOCOLS</button>
-          <button class="admin-tab" data-admin-tab="users-tab" id="admin-users-tab-btn">USER MANAGEMENT</button>
+          <button class="admin-tab active" data-admin-tab="api-tab"><span class="admin-tab-icon">🔌</span> API INTERFACES</button>
+          <button class="admin-tab" data-admin-tab="theme-tab"><span class="admin-tab-icon">🎨</span> THEME DESIGN</button>
+          <button class="admin-tab" data-admin-tab="brand-tab"><span class="admin-tab-icon">🏷️</span> BRAND PROTOCOLS</button>
+          <button class="admin-tab" data-admin-tab="users-tab" id="admin-users-tab-btn"><span class="admin-tab-icon">👥</span> USER MANAGEMENT</button>
         </div>
 
         <div id="api-tab" class="admin-content active animate-fade">
+          <!-- Mode Toggle (admin-only) -->
+          <div class="api-mode-toggle-wrap" id="api-mode-toggle-wrap">
+            <div class="api-mode-toggle-label">
+              <span class="api-mode-toggle-title">API KEY MODE</span>
+              <span class="api-mode-toggle-hint">Choose how API keys are resolved across all accounts</span>
+            </div>
+            <div class="api-mode-segmented">
+              <button type="button" class="api-mode-option" data-mode="individual">
+                <span class="api-mode-icon">👤</span>
+                <span class="api-mode-text">INDIVIDUAL USE</span>
+                <span class="api-mode-desc">Each user uses their own saved key</span>
+              </button>
+              <button type="button" class="api-mode-option" data-mode="global">
+                <span class="api-mode-icon">🌐</span>
+                <span class="api-mode-text">GLOBAL USE</span>
+                <span class="api-mode-desc">Admin's key shared across all accounts</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Global key banner (visible to all in global mode; non-admin read-only) -->
+          <div class="global-key-banner hidden" id="global-key-banner">
+            <span class="global-key-banner-icon">🔒</span>
+            <span class="global-key-banner-note">Global mode active.</span>
+          </div>
+
+          <!-- Live Quota Mini-Card -->
+          <div class="panel-quota-card hidden" id="panel-quota-card">
+            <div class="panel-quota-card-top">
+              <span class="panel-quota-card-title">⚡ LIVE SERPAPI QUOTA</span>
+              <span class="panel-quota-status" id="panel-quota-status">—</span>
+            </div>
+            <div class="panel-quota-track">
+              <div class="panel-quota-fill" id="panel-quota-fill"></div>
+            </div>
+            <div class="panel-quota-numbers" id="panel-quota-numbers">Loading...</div>
+          </div>
+
           <div class="admin-form-group">
             <label>SERPAPI ENGINE KEY</label>
             <input type="password" id="admin-serp-key" class="premium-input">
