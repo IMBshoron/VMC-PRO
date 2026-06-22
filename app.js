@@ -57,22 +57,22 @@ let LAST_USAGE_BEFORE_SCRAPE = null; // for "+N used just now" indicator
 
 // ===== WORLD GEOGRAPHIC RECORDS =====
 const COUNTRIES = [
-  "Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia","Austria","Azerbaijan",
-  "Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia",
-  "Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon","Canada",
-  "Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba",
-  "Cyprus","Czech Republic","Denmark","Djibouti","Dominican Republic","Ecuador","Egypt","El Salvador","Estonia","Ethiopia",
-  "Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Guatemala",
-  "Guinea","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland",
-  "Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kuwait","Kyrgyzstan","Laos",
-  "Latvia","Lebanon","Libya","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali",
-  "Malta","Mexico","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia",
-  "Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman",
-  "Pakistan","Panama","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia",
-  "Rwanda","Saudi Arabia","Senegal","Serbia","Singapore","Slovakia","Slovenia","Somalia","South Africa","South Korea",
-  "Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tanzania","Thailand","Togo",
-  "Tunisia","Turkey","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Venezuela",
-  "Vietnam","Yemen","Zambia","Zimbabwe"
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
+  "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
+  "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada",
+  "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba",
+  "Cyprus", "Czech Republic", "Denmark", "Djibouti", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Estonia", "Ethiopia",
+  "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Guatemala",
+  "Guinea", "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland",
+  "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait", "Kyrgyzstan", "Laos",
+  "Latvia", "Lebanon", "Libya", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali",
+  "Malta", "Mexico", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia",
+  "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman",
+  "Pakistan", "Panama", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia",
+  "Rwanda", "Saudi Arabia", "Senegal", "Serbia", "Singapore", "Slovakia", "Slovenia", "Somalia", "South Africa", "South Korea",
+  "Spain", "Sri Lanka", "Sudan", "Sweden", "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand", "Togo",
+  "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Venezuela",
+  "Vietnam", "Yemen", "Zambia", "Zimbabwe"
 ];
 
 // ===== KICKSTART THE SYSTEM =====
@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (loginUser) loginUser.value = data.username || '';
       if (loginPass) loginPass.value = data.password || '';
       if (rememberBox) rememberBox.checked = true;
-    } catch(e) {}
+    } catch (e) { }
   }
 
   // Listen for Enter key on auth inputs
@@ -110,23 +110,23 @@ document.addEventListener("DOMContentLoaded", () => {
       currentUser = user;
       isAdmin = (user.email === ADMIN_EMAIL);
       const username = emailToUsername(user.email);
-      
+
       // Store username in database
       await db.ref(`users/${user.uid}/username`).set(username);
-      
+
       // Show user badge in header
       const badge = document.getElementById('header-user-badge');
       if (badge) badge.textContent = '👤 ' + username.toUpperCase();
-      
+
       // Show/hide admin users tab
       const usersTab = document.getElementById('admin-users-tab-btn');
       if (usersTab) usersTab.style.display = isAdmin ? '' : 'none';
       // Show/hide admin-only controls (mode toggle, global key) based on role
       updateAdminOnlyControls();
-      
+
       // Load user's API key from Firebase
       await loadUserApiKey(user.uid);
-      
+
       // Transition from auth to dashboard
       transitionToDashboard();
     } else {
@@ -143,7 +143,7 @@ function switchAuthTab(tab) {
   const signupForm = document.getElementById('signup-form');
   const loginTab = document.getElementById('login-tab-btn');
   const signupTab = document.getElementById('signup-tab-btn');
-  
+
   if (tab === 'login') {
     loginForm.classList.remove('hidden');
     signupForm.classList.add('hidden');
@@ -162,21 +162,21 @@ async function handleLogin() {
   const password = document.getElementById('login-password').value;
   const errorEl = document.getElementById('login-error');
   const btn = document.getElementById('login-btn');
-  
+
   if (!username || !password) {
     errorEl.textContent = 'USERNAME AND PASSWORD REQUIRED';
     return;
   }
-  
+
   errorEl.textContent = '';
   btn.disabled = true;
   btn.querySelector('.auth-btn-text').textContent = 'AUTHENTICATING...';
-  
+
   const email = usernameToEmail(username);
-  
+
   try {
     await auth.signInWithEmailAndPassword(email, password);
-    
+
     // Handle remember me
     const rememberMe = document.getElementById('remember-me').checked;
     if (rememberMe) {
@@ -201,7 +201,7 @@ async function handleSignup() {
   const confirm = document.getElementById('signup-confirm').value;
   const errorEl = document.getElementById('signup-error');
   const btn = document.getElementById('signup-btn');
-  
+
   if (!username || !password) {
     errorEl.textContent = 'ALL FIELDS REQUIRED';
     return;
@@ -218,13 +218,13 @@ async function handleSignup() {
     errorEl.textContent = 'PASSWORDS DO NOT MATCH';
     return;
   }
-  
+
   errorEl.textContent = '';
   btn.disabled = true;
   btn.querySelector('.auth-btn-text').textContent = 'CREATING ACCOUNT...';
-  
+
   const email = usernameToEmail(username);
-  
+
   try {
     await auth.createUserWithEmailAndPassword(email, password);
   } catch (err) {
@@ -255,7 +255,7 @@ function showAuthScreen() {
 function transitionToDashboard() {
   const authScreen = document.getElementById('auth-screen');
   const mainApp = document.getElementById('main-app');
-  
+
   if (authScreen) {
     authScreen.classList.add('fade-out');
     setTimeout(() => {
@@ -297,7 +297,7 @@ async function loadUserApiKey(uid) {
     await refreshActiveApiKey();
     // Reflect in the admin panel field (if open)
     syncApiKeyFieldWithValue();
-  } catch(e) {
+  } catch (e) {
     console.warn('Failed to load user API key', e);
     USER_API_KEY = "";
   }
@@ -308,7 +308,7 @@ async function saveUserApiKey(apiKey) {
   try {
     await db.ref(`users/${currentUser.uid}/api_key`).set(apiKey);
     USER_API_KEY = apiKey;
-  } catch(e) {
+  } catch (e) {
     console.warn('Failed to save user API key', e);
   }
 }
@@ -439,7 +439,7 @@ async function setApiMode(mode) {
   try {
     await db.ref('vmc_config/apiMode').set(mode);
     // updateModeToggleUI + refresh happen via the Firebase listener
-  } catch(e) {
+  } catch (e) {
     showPremiumToast('Failed to switch API mode', 'error');
   }
 }
@@ -447,26 +447,26 @@ async function setApiMode(mode) {
 // ===== ADMIN USER MANAGEMENT =====
 async function adminAddUser() {
   if (!isAdmin) return showPremiumToast('ADMIN ACCESS REQUIRED', 'error');
-  
+
   const username = document.getElementById('admin-new-username').value.trim();
   const password = document.getElementById('admin-new-password').value;
-  
+
   if (!username || !password) return showPremiumToast('USERNAME AND PASSWORD REQUIRED', 'error');
   if (password.length < 6) return showPremiumToast('PASSWORD MUST BE AT LEAST 6 CHARACTERS', 'error');
-  
+
   const email = usernameToEmail(username);
-  
+
   try {
     // Save current user credentials to re-login admin after creating new user
     const adminEmail = currentUser.email;
     const adminCredential = localStorage.getItem('vmc_remember_user');
-    
+
     // Create new user (this will sign in as the new user)
     const result = await auth.createUserWithEmailAndPassword(email, password);
-    
+
     // Store username in database
     await db.ref(`users/${result.user.uid}/username`).set(username);
-    
+
     // Sign back in as admin
     if (adminCredential) {
       const cred = JSON.parse(adminCredential);
@@ -475,12 +475,12 @@ async function adminAddUser() {
       // Fallback: try to sign back with known admin creds
       await auth.signInWithEmailAndPassword(ADMIN_EMAIL, '0188283');
     }
-    
+
     document.getElementById('admin-new-username').value = '';
     document.getElementById('admin-new-password').value = '';
     showPremiumToast(`User "${username}" created successfully!`, 'success');
     loadAdminUserList();
-  } catch(err) {
+  } catch (err) {
     let msg = 'FAILED TO CREATE USER';
     if (err.code === 'auth/email-already-in-use') msg = 'USERNAME ALREADY EXISTS';
     showPremiumToast(msg, 'error');
@@ -490,13 +490,13 @@ async function adminAddUser() {
 async function adminRemoveUser(uid, username) {
   if (!isAdmin) return;
   if (!confirm(`Remove user "${username}"? This will delete their data.`)) return;
-  
+
   try {
     // Remove user data from database
     await db.ref(`users/${uid}`).remove();
     showPremiumToast(`User "${username}" data removed`, 'success');
     loadAdminUserList();
-  } catch(e) {
+  } catch (e) {
     showPremiumToast('Failed to remove user', 'error');
   }
 }
@@ -505,14 +505,14 @@ async function loadAdminUserList() {
   if (!isAdmin) return;
   const listEl = document.getElementById('admin-users-list');
   if (!listEl) return;
-  
+
   try {
     const snap = await db.ref('users').once('value');
     if (!snap.exists()) {
       listEl.innerHTML = '<p style="color:var(--text-secondary);font-size:11px;">No users found</p>';
       return;
     }
-    
+
     const users = snap.val();
     listEl.innerHTML = Object.keys(users).map(uid => {
       const user = users[uid];
@@ -521,7 +521,7 @@ async function loadAdminUserList() {
       const isAdminUser = (uname.toLowerCase() === ADMIN_USERNAME.toLowerCase());
       const badgeHtml = isAdminUser ? '<span class="admin-user-badge">ADMIN</span>' : '';
       const removeBtn = !isAdminUser ? `<button class="admin-user-remove" onclick="adminRemoveUser('${uid}','${uname}')">REMOVE</button>` : '';
-      
+
       return `
         <div class="admin-user-item">
           <div class="admin-user-info">
@@ -532,7 +532,7 @@ async function loadAdminUserList() {
         </div>
       `;
     }).join('');
-  } catch(e) {
+  } catch (e) {
     listEl.innerHTML = '<p style="color:var(--danger);font-size:11px;">Failed to load users</p>';
   }
 }
@@ -709,7 +709,7 @@ function initManualProtocol() {
           const emails = extractValidEmails(fullStr);
           if (emails.length === 0) return showPremiumToast("Extracted empty record stack from Excel binary", "error");
           processValidationQueue(emails, "Excel Protocol");
-        } catch(err) {
+        } catch (err) {
           showPremiumToast("Failed to parse premium spreadsheet structures", "error");
         }
       };
@@ -727,13 +727,13 @@ function setupCyberDropZone(zoneId, inputId) {
   if (!zone || !input) return;
 
   zone.addEventListener("click", () => input.click());
-  zone.addEventListener("dragover", (e) => { 
-    e.preventDefault(); 
-    zone.style.borderColor = "var(--primary)"; 
+  zone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    zone.style.borderColor = "var(--primary)";
     zone.style.boxShadow = "var(--shadow-neon)";
   });
-  zone.addEventListener("dragleave", () => { 
-    zone.style.borderColor = ""; 
+  zone.addEventListener("dragleave", () => {
+    zone.style.borderColor = "";
     zone.style.boxShadow = "";
   });
   zone.addEventListener("drop", (e) => {
@@ -783,6 +783,7 @@ function setupCountrySelector() {
 
 // CORS proxy list with fallbacks
 const CORS_PROXIES = [
+  (url) => `/.netlify/functions/api-proxy?targetUrl=${encodeURIComponent(url)}`,
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
@@ -820,7 +821,7 @@ async function executeAutoSearch() {
   const queries = [
     `"${domainExt}" ${queryName} ${locVal} email contact`,
     `${queryName} email "${domainExt}" ${locVal}`,
-    `"${queryName}" "${locVal}" "@" "${domainExt.replace('@','')}"`
+    `"${queryName}" "${locVal}" "@" "${domainExt.replace('@', '')}"`
   ];
 
   showProgressTrack("SPINNING SERPAPI SEARCH THREADS...");
@@ -843,7 +844,7 @@ async function executeAutoSearch() {
 
     let uniqueEmails = new Set();
     let allExtractedBlocks = "";
-    
+
     // Run queries
     for (let q = 0; q < queries.length; q++) {
       if (uniqueEmails.size >= maxEmails) break;
@@ -858,12 +859,12 @@ async function executeAutoSearch() {
 
         const startOffset = page * resultsPerPage;
         const serpEndpoint = `https://serpapi.com/search.json?q=${encodeURIComponent(queries[q])}&api_key=${CONFIG.serpApiKey}&num=${resultsPerPage}&start=${startOffset}`;
-        
+
         showProgressTrack(`SERPAPI RUNNING (Query ${q + 1}/${queries.length}, Page ${page + 1}): ${uniqueEmails.size}/${maxEmails} COLLECTED`);
 
         try {
           const payload = await fetchWithCorsProxy(serpEndpoint);
-          
+
           if (payload.error) {
             if (payload.error.includes("Invalid API key") || payload.error.includes("expired") || payload.error.includes("limit")) {
               triggerLimitAlert("SerpAPI");
@@ -911,7 +912,7 @@ async function executeAutoSearch() {
         // Small delay between page fetches
         if (page < pagesToFetch - 1) await new Promise(r => setTimeout(r, 600));
       }
-      
+
       // Small delay between query blocks
       if (q < queries.length - 1 && uniqueEmails.size < maxEmails) {
         await new Promise(r => setTimeout(r, 600));
@@ -919,7 +920,7 @@ async function executeAutoSearch() {
     }
 
     const emails = Array.from(uniqueEmails);
-    
+
     if (emails.length === 0) {
       hideProgressTrack();
       return showPremiumToast("Search complete. No email addresses found in results. Try different keywords.", "info");
@@ -937,8 +938,8 @@ async function executeAutoSearch() {
     // failures are never silently swallowed (root cause of "scraping not working").
     const low = msg.toLowerCase();
     if (low.includes("limit") || low.includes("key") || low.includes("api") ||
-        low.includes("credential") || low.includes("quota") || low.includes("proxy") ||
-        low.includes("network") || low.includes("exhausted")) {
+      low.includes("credential") || low.includes("quota") || low.includes("proxy") ||
+      low.includes("network") || low.includes("exhausted")) {
       triggerLimitAlert("SerpAPI");
     }
   }
@@ -964,7 +965,7 @@ function extractValidEmails(text) {
       if (!/\.[a-z]{2,}$/.test(domain)) return false; // must end with valid TLD
       if (/\.\./.test(domain)) return false;
       // Filter out common false positives
-      const badDomains = ['example.com','test.com','email.com','domain.com','sentry.io','w3.org','schema.org','googleapis.com','gstatic.com','cloudflare.com'];
+      const badDomains = ['example.com', 'test.com', 'email.com', 'domain.com', 'sentry.io', 'w3.org', 'schema.org', 'googleapis.com', 'gstatic.com', 'cloudflare.com'];
       if (badDomains.includes(domain)) return false;
       // Filter image/file extensions mistakenly caught
       if (/\.(png|jpg|jpeg|gif|svg|webp|css|js|html|xml|json)$/i.test(domain)) return false;
@@ -1007,7 +1008,7 @@ async function processValidationQueue(emails, sourceLabel) {
   showProgressTrack(`RUNNING ALIGNMENT ENGINE: 0/${emails.length}`);
   const progressFill = document.getElementById("progress-bar");
   const progressTxt = document.getElementById("progress-text");
-  
+
   let validHits = 0;
 
   // Check for duplicates against already-found emails AND claimed emails, and filter to ONLY free mail domains
@@ -1046,7 +1047,7 @@ async function processValidationQueue(emails, sourceLabel) {
       });
       validHits++;
       updateMailBoxGrid();
-    } catch(err) {
+    } catch (err) {
       console.error(`Error validating ${email}:`, err);
       const domain = email.split('@')[1];
       const isPro = !FREE_DOMAINS.has(domain);
@@ -1095,7 +1096,7 @@ async function checkEmailAvatar(email) {
   const hashedVal = md5(emailLower);
   const gravatarUrl = `https://www.gravatar.com/avatar/${hashedVal}?s=200`;
   const checkUrl = `https://www.gravatar.com/avatar/${hashedVal}?d=404&s=200`;
-  
+
   // 1. Check Gravatar
   const hasGravatar = await new Promise((resolve) => {
     const timeout = setTimeout(() => resolve(false), 2000);
@@ -1142,7 +1143,7 @@ async function checkEmailAvatar(email) {
   const styleIdx = Math.abs(hash) % dicebearStyles.length;
   const chosenStyle = dicebearStyles[styleIdx];
   const dicebearUrl = `https://api.dicebear.com/7.x/${chosenStyle}/svg?seed=${encodeURIComponent(emailLower)}`;
-  
+
   return { hasRealAvatar: false, type: "generated", avatarUrl: dicebearUrl };
 }
 
@@ -1177,14 +1178,14 @@ function updateMailBoxGrid() {
   }
 
   grid.innerHTML = displayList.map((item, idx) => {
-    const domainBadge = item.isProfessional 
+    const domainBadge = item.isProfessional
       ? '<span class="badge-pro" title="Corporate/Business Domain">PRO DOMAIN</span>'
       : '<span class="badge-free" title="Free Public Mail Domain">FREE MAIL</span>';
-      
+
     const mxBadge = item.hasMX
       ? '<span class="badge-mx-active" title="Mail Exchanger (MX) Records Found">MX ACTIVE</span>'
       : '<span class="badge-mx-inactive" title="No Mail Exchanger (MX) Records Found">MX INACTIVE</span>';
-      
+
     const deliverableBadge = item.deliverable
       ? '<span class="badge-deliverable" title="Email is highly likely deliverable">DELIVERABLE</span>'
       : '<span class="badge-undeliverable" title="Email domain has no active mail server">UNDELIVERABLE</span>';
@@ -1236,10 +1237,10 @@ function downloadArchive() {
     const domain = item.email.split('@')[1];
     return FREE_DOMAINS.has(domain);
   });
-  const content = "EMAIL,PROTOCOL_SOURCE,TIMESTAMP\n" + displayList.map(item => 
+  const content = "EMAIL,PROTOCOL_SOURCE,TIMESTAMP\n" + displayList.map(item =>
     `"${item.email}","${item.source}","${new Date(item.time).toISOString()}"`
   ).join("\n");
-  
+
   const blob = new Blob([content], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const trigger = document.createElement("a");
@@ -1318,7 +1319,7 @@ function initControlStation() {
         }
         try {
           await db.ref("vmc_config/globalSerpApiKey").set(serpVal);
-        } catch(e) {
+        } catch (e) {
           return showPremiumToast("Failed to save global API key", "error");
         }
       } else {
@@ -1431,7 +1432,7 @@ async function uploadImgbbAsset(file) {
     const parsed = await res.json();
     if (parsed.success) return parsed.data.url;
     throw new Error("ImgBB engine rejection");
-  } catch(e) {
+  } catch (e) {
     showPremiumToast(e.message, "error");
     triggerLimitAlert("ImgBB API");
     return null;
@@ -1446,7 +1447,7 @@ async function checkAllStatuses() {
     await db.ref(".info/connected").once("value");
     dbStatus = true;
     updateMonitorWidget("firebase", true, "CONNECTED");
-  } catch(e) {
+  } catch (e) {
     updateMonitorWidget("firebase", false, "DISCONNECTED");
   }
 
@@ -1542,9 +1543,9 @@ function loadConfigFromFirebase() {
       // resolved via resolveActiveApiKey() (mode-aware). We do read the
       // apiMode + globalSerpApiKey fields that drive that resolution.
       const safeFields = [
-        'siteName','devName','logoUrl','faviconUrl',
-        'themePrimary','themeSecondary','themeBg',
-        'apiMode','globalSerpApiKey'
+        'siteName', 'devName', 'logoUrl', 'faviconUrl',
+        'themePrimary', 'themeSecondary', 'themeBg',
+        'apiMode', 'globalSerpApiKey'
       ];
       safeFields.forEach(k => {
         if (remote[k] !== undefined) CONFIG[k] = remote[k];
@@ -1581,7 +1582,7 @@ function applySystemBranding() {
     const node = document.getElementById(id);
     if (node) node.textContent = CONFIG.siteName;
   });
-  
+
   document.title = `${CONFIG.siteName} | Ultra Validation Checker`;
   const dev = document.getElementById("footer-text");
   if (dev) dev.textContent = `Developed by ${CONFIG.devName}`;
@@ -1730,7 +1731,7 @@ function setUsageBar({ pct = 0, left = 0, total = 0, used = 0, state = 'ok', del
 function startUsageBarAutoRefresh() {
   if (USAGE_BAR_INTERVAL) clearInterval(USAGE_BAR_INTERVAL);
   USAGE_BAR_INTERVAL = setInterval(() => {
-    updateApiUsageBar(false).catch(() => {});
+    updateApiUsageBar(false).catch(() => { });
   }, 60000);
 }
 
@@ -1854,12 +1855,12 @@ function initCodeMailProtocol() {
   if (loginBtn) {
     loginBtn.addEventListener('click', executeCodeMailLogin);
   }
-  
+
   const accountSelect = document.getElementById('codemail-account-select');
   if (accountSelect) {
     accountSelect.addEventListener('change', filterCodeMailInbox);
   }
-  
+
   // Load any saved codemail accounts from Firebase
   loadCodeMailAccounts();
 }
@@ -1867,7 +1868,7 @@ function initCodeMailProtocol() {
 function addCredRow() {
   const list = document.getElementById('codemail-credentials-list');
   if (!list) return;
-  
+
   const row = document.createElement('div');
   row.className = 'codemail-cred-row';
   row.setAttribute('data-row-index', codeMailRowCounter++);
@@ -1883,7 +1884,7 @@ function addCredRow() {
     <button class="codemail-remove-row-btn" onclick="removeCredRow(this)" title="Remove">✕</button>
   `;
   list.appendChild(row);
-  
+
   // Show remove buttons for all rows when there's more than one
   updateRemoveButtons();
 }
@@ -1922,12 +1923,12 @@ async function executeCodeMailLogin() {
   if (creds.length === 0) {
     return showPremiumToast('Enter at least one email and password', 'error');
   }
-  
+
   // Show status panel
   const statusPanel = document.getElementById('codemail-status-panel');
   const statusList = document.getElementById('codemail-status-list');
   if (statusPanel) statusPanel.classList.remove('hidden');
-  
+
   codeMailAccounts = creds.map(c => ({
     email: c.email,
     password: c.password,
@@ -1935,20 +1936,20 @@ async function executeCodeMailLogin() {
     token: null,
     messages: []
   }));
-  
+
   // Render initial status
   renderLoginStatus();
-  
+
   // Process each credential
   for (let i = 0; i < codeMailAccounts.length; i++) {
     const account = codeMailAccounts[i];
     try {
       statusList.children[i].querySelector('.codemail-status-indicator').className = 'codemail-status-indicator status-logging-in';
       statusList.children[i].querySelector('.codemail-status-text').textContent = 'CONNECTING...';
-      
+
       // Attempt IMAP login via proxy
       const result = await imapLoginViaProxy(account.email, account.password);
-      
+
       if (result.success) {
         account.status = 'success';
         account.token = result.token || 'authenticated';
@@ -1970,11 +1971,11 @@ async function executeCodeMailLogin() {
         statusList.children[i].querySelector('.codemail-status-text').style.color = 'var(--danger)';
       }
     }
-    
+
     // Small delay between accounts
     if (i < codeMailAccounts.length - 1) await new Promise(r => setTimeout(r, 500));
   }
-  
+
   // Check if any succeeded
   const successAccounts = codeMailAccounts.filter(a => a.status === 'success');
   if (successAccounts.length > 0) {
@@ -1989,7 +1990,7 @@ async function executeCodeMailLogin() {
 function renderLoginStatus() {
   const statusList = document.getElementById('codemail-status-list');
   if (!statusList) return;
-  
+
   statusList.innerHTML = codeMailAccounts.map((acc, idx) => `
     <div class="codemail-status-item" data-index="${idx}">
       <div class="codemail-status-indicator status-logging-in"></div>
@@ -2018,7 +2019,7 @@ async function imapLoginViaProxy(email, password) {
         password: password
       })
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       return data;
@@ -2034,7 +2035,7 @@ async function imapLoginViaProxy(email, password) {
 function activateInboxPanel() {
   const inboxCard = document.getElementById('codemail-inbox-card');
   if (inboxCard) inboxCard.classList.remove('hidden');
-  
+
   const select = document.getElementById('codemail-account-select');
   if (select) {
     select.innerHTML = '<option value="all">ALL ACCOUNTS</option>';
@@ -2042,13 +2043,13 @@ function activateInboxPanel() {
       select.innerHTML += `<option value="${acc.email}">${acc.email}</option>`;
     });
   }
-  
+
   buildCodeMailInbox();
 }
 
 function buildCodeMailInbox() {
   codeMailInbox = [];
-  
+
   codeMailAccounts.filter(a => a.status === 'success').forEach(acc => {
     if (acc.messages && acc.messages.length > 0) {
       acc.messages.forEach(msg => {
@@ -2059,10 +2060,10 @@ function buildCodeMailInbox() {
       });
     }
   });
-  
+
   // Sort by date descending
   codeMailInbox.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-  
+
   renderCodeMailInbox();
 }
 
@@ -2072,7 +2073,7 @@ async function loadCodeMailMessages() {
     if (snap.exists()) {
       const data = snap.val();
       const fetchedMails = [];
-      
+
       Object.keys(data).forEach(accountKey => {
         const accountMails = data[accountKey];
         if (typeof accountMails === 'object') {
@@ -2095,20 +2096,20 @@ async function loadCodeMailMessages() {
           });
         }
       });
-      
+
       // Merge with existing inbox
       fetchedMails.forEach(fm => {
         if (!codeMailInbox.find(m => m.id === fm.id)) {
           codeMailInbox.push(fm);
         }
       });
-      
+
       codeMailInbox.sort((a, b) => (b.date || 0) - (a.date || 0));
     }
   } catch (e) {
     console.warn('Failed to load codemail inbox from Firebase', e);
   }
-  
+
   renderCodeMailInbox();
 }
 
@@ -2116,37 +2117,37 @@ function renderCodeMailInbox() {
   const list = document.getElementById('codemail-inbox-list');
   const countBadge = document.getElementById('codemail-inbox-count');
   if (!list) return;
-  
+
   const activeFilter = document.getElementById('codemail-account-select')?.value || 'all';
-  const filteredMails = activeFilter === 'all' 
-    ? codeMailInbox 
+  const filteredMails = activeFilter === 'all'
+    ? codeMailInbox
     : codeMailInbox.filter(m => m.accountEmail === activeFilter);
-  
+
   if (countBadge) countBadge.textContent = `${filteredMails.length} MESSAGE${filteredMails.length !== 1 ? 'S' : ''}`;
-  
+
   if (filteredMails.length === 0) {
     const successCount = codeMailAccounts.filter(a => a.status === 'success').length;
     list.innerHTML = `
       <div class="empty-mailbox-state">
         <span class="empty-state-visual">${successCount > 0 ? '📭' : '📭'}</span>
         <p class="empty-state-head">${successCount > 0 ? 'INBOX EMPTY' : 'AWAITING MAIL STREAM'}</p>
-        <p class="empty-state-sub">${successCount > 0 
-          ? 'No messages found in the connected accounts. Try refreshing or wait for incoming mail.'
-          : 'Login with your credentials above to activate the inbox scanner.'}</p>
+        <p class="empty-state-sub">${successCount > 0
+        ? 'No messages found in the connected accounts. Try refreshing or wait for incoming mail.'
+        : 'Login with your credentials above to activate the inbox scanner.'}</p>
       </div>
     `;
     return;
   }
-  
+
   list.innerHTML = filteredMails.map((mail, idx) => {
     const fromInitial = (mail.from || '?').charAt(0).toUpperCase();
-    
+
     // Check local read status as well
     const isRead = mail.read || (mail.id && JSON.parse(localStorage.getItem('vmc_read_mails') || '{}')[mail.id]);
     const readClass = isRead ? 'codemail-mail-read' : 'codemail-mail-unread';
     const dateStr = mail.date ? new Date(mail.date).toLocaleString() : '--';
     const avatarSvg = generateLetterAvatar(mail.from || 'U');
-    
+
     return `
       <div class="codemail-mail-item ${readClass}" onclick="openMailReader(${idx})" style="animation-delay: ${idx * 0.04}s">
         <img class="codemail-mail-avatar" src="${avatarSvg}" alt="${fromInitial}">
@@ -2177,31 +2178,31 @@ function filterCodeMailInbox() {
 
 function openMailReader(index) {
   const activeFilter = document.getElementById('codemail-account-select')?.value || 'all';
-  const filteredMails = activeFilter === 'all' 
-    ? codeMailInbox 
+  const filteredMails = activeFilter === 'all'
+    ? codeMailInbox
     : codeMailInbox.filter(m => m.accountEmail === activeFilter);
-  
+
   const mail = filteredMails[index];
   if (!mail) return;
-  
+
   // Mark as read
   mail.read = true;
-  
+
   // Update in localStorage
   if (mail.id && mail.accountEmail) {
     const readMails = JSON.parse(localStorage.getItem('vmc_read_mails') || '{}');
     readMails[mail.id] = true;
     localStorage.setItem('vmc_read_mails', JSON.stringify(readMails));
   }
-  
+
   // Show reader overlay
   const overlay = document.getElementById('codemail-reader-overlay');
   if (overlay) overlay.classList.remove('hidden');
-  
+
   document.getElementById('codemail-reader-subject').textContent = mail.subject || '(No Subject)';
   document.getElementById('codemail-reader-from').textContent = `From: ${mail.from || 'Unknown'}`;
   document.getElementById('codemail-reader-date').textContent = `Date: ${mail.date ? new Date(mail.date).toLocaleString() : '--'}`;
-  
+
   const bodyEl = document.getElementById('codemail-reader-body');
   if (bodyEl) {
     // Check if the body contains HTML
@@ -2211,7 +2212,7 @@ function openMailReader(index) {
       bodyEl.innerHTML = `<pre class="codemail-text-content">${escapeHtml(mail.body || mail.preview || 'No content available.')}</pre>`;
     }
   }
-  
+
   // Re-render inbox to update read status
   renderCodeMailInbox();
 }
@@ -2228,7 +2229,7 @@ async function refreshCodeMailInbox() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = '↻ SCANNING...';
   }
-  
+
   // Fetch fresh emails from each connected account via real IMAP
   for (const acc of codeMailAccounts.filter(a => a.status === 'success')) {
     try {
@@ -2240,21 +2241,21 @@ async function refreshCodeMailInbox() {
           email: acc.email
         })
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.messages) {
           acc.messages = data.messages;
         }
       }
-    } catch(e) {
+    } catch (e) {
       console.warn(`Refresh failed for ${acc.email}:`, e.message);
     }
   }
-  
+
   // Rebuild inbox from fresh data
   buildCodeMailInbox();
-  
+
   if (refreshBtn) {
     refreshBtn.disabled = false;
     refreshBtn.textContent = '↻ REFRESH';
@@ -2287,12 +2288,12 @@ async function loadCodeMailAccounts() {
           });
         }
       });
-      
+
       if (loaded.length > 0) {
         populateCredentialRows(loaded);
       }
     }
-  } catch(e) {
+  } catch (e) {
     console.warn('Failed to load codemail accounts', e);
   }
 }
@@ -2300,7 +2301,7 @@ async function loadCodeMailAccounts() {
 function populateCredentialRows(accounts) {
   const list = document.getElementById('codemail-credentials-list');
   if (!list || accounts.length === 0) return;
-  
+
   list.innerHTML = '';
   accounts.forEach((acc, idx) => {
     const row = document.createElement('div');
@@ -2352,15 +2353,15 @@ function levenshtein(a, b) {
 function fuzzyMatch(query, target) {
   const q = query.toLowerCase().trim();
   const t = target.toLowerCase().trim();
-  
+
   // Exact substring match
   if (t.includes(q)) return { match: true, score: 100, type: 'exact' };
-  
+
   // Check each word in target
   const targetWords = t.split(/[\s@._\-\/]+/);
   for (const word of targetWords) {
     if (word.includes(q)) return { match: true, score: 90, type: 'partial' };
-    
+
     // Levenshtein distance - allow up to 2 char typos for short names, 3 for longer
     const maxDist = q.length <= 5 ? 2 : 3;
     const dist = levenshtein(q, word);
@@ -2368,7 +2369,7 @@ function fuzzyMatch(query, target) {
       return { match: true, score: 80 - dist * 10, type: 'fuzzy' };
     }
   }
-  
+
   // Check if query letters appear in order (subsequence match)
   let qi = 0;
   for (let ti = 0; ti < t.length && qi < q.length; ti++) {
@@ -2377,7 +2378,7 @@ function fuzzyMatch(query, target) {
   if (qi === q.length && q.length >= 3) {
     return { match: true, score: 40, type: 'subsequence' };
   }
-  
+
   return { match: false, score: 0, type: 'none' };
 }
 
@@ -2385,23 +2386,23 @@ function executeDomainSearch() {
   const input = document.getElementById('domain-search-input');
   const resultsDiv = document.getElementById('domain-search-results');
   if (!input || !resultsDiv) return;
-  
+
   const query = input.value.trim();
   if (!query || query.length < 2) {
     showPremiumToast('Enter at least 2 characters to search', 'warning');
     return;
   }
-  
+
   resultsDiv.classList.remove('hidden');
-  
+
   // Search through ALL inbox emails
   const matches = [];
-  
+
   for (const mail of codeMailInbox) {
     let bestScore = 0;
     let matchType = 'none';
     let matchField = '';
-    
+
     // Search in sender domain
     const senderDomain = mail.senderDomain || (mail.fromAddress || mail.from || '').split('@')[1] || '';
     let result = fuzzyMatch(query, senderDomain);
@@ -2410,7 +2411,7 @@ function executeDomainSearch() {
       matchType = result.type;
       matchField = 'sender domain';
     }
-    
+
     // Search in from name/address
     result = fuzzyMatch(query, mail.from || '');
     if (result.match && result.score > bestScore) {
@@ -2418,7 +2419,7 @@ function executeDomainSearch() {
       matchType = result.type;
       matchField = 'sender';
     }
-    
+
     // Search in subject
     result = fuzzyMatch(query, mail.subject || '');
     if (result.match && result.score > bestScore) {
@@ -2426,7 +2427,7 @@ function executeDomainSearch() {
       matchType = result.type;
       matchField = 'subject';
     }
-    
+
     // Search in body/preview (for company names in email content)
     const bodyText = (mail.body || '').replace(/<[^>]*>/g, '') + ' ' + (mail.preview || '');
     result = fuzzyMatch(query, bodyText);
@@ -2435,15 +2436,15 @@ function executeDomainSearch() {
       matchType = result.type;
       matchField = 'body';
     }
-    
+
     if (bestScore > 0) {
       matches.push({ mail, score: bestScore, matchType, matchField });
     }
   }
-  
+
   // Sort by score (best matches first)
   matches.sort((a, b) => b.score - a.score);
-  
+
   if (matches.length === 0) {
     resultsDiv.innerHTML = `
       <div class="domain-search-empty">
@@ -2454,7 +2455,7 @@ function executeDomainSearch() {
     `;
     return;
   }
-  
+
   // Show results
   const matchBadgeColors = {
     'exact': 'badge-match-exact',
@@ -2462,7 +2463,7 @@ function executeDomainSearch() {
     'fuzzy': 'badge-match-fuzzy',
     'subsequence': 'badge-match-subsequence'
   };
-  
+
   resultsDiv.innerHTML = `
     <div class="domain-search-result-header">
       <span class="domain-search-found-icon">⚠️</span>
@@ -2470,11 +2471,11 @@ function executeDomainSearch() {
     </div>
     <div class="domain-search-result-list">
       ${matches.map((m, idx) => {
-        const dateStr = m.mail.date ? new Date(m.mail.date).toLocaleString() : '--';
-        const avatarSvg = generateLetterAvatar(m.mail.from || 'U');
-        const matchLabel = m.matchType === 'exact' ? 'EXACT' : m.matchType === 'partial' ? 'PARTIAL' : m.matchType === 'fuzzy' ? 'FUZZY MATCH' : 'LOOSE';
-        const badgeClass = matchBadgeColors[m.matchType] || 'badge-match-fuzzy';
-        return `
+    const dateStr = m.mail.date ? new Date(m.mail.date).toLocaleString() : '--';
+    const avatarSvg = generateLetterAvatar(m.mail.from || 'U');
+    const matchLabel = m.matchType === 'exact' ? 'EXACT' : m.matchType === 'partial' ? 'PARTIAL' : m.matchType === 'fuzzy' ? 'FUZZY MATCH' : 'LOOSE';
+    const badgeClass = matchBadgeColors[m.matchType] || 'badge-match-fuzzy';
+    return `
           <div class="domain-search-result-item" onclick="openDomainSearchMail(${idx})" style="animation-delay: ${idx * 0.05}s">
             <img class="codemail-mail-avatar" src="${avatarSvg}" alt="">
             <div class="domain-search-result-info">
@@ -2491,10 +2492,10 @@ function executeDomainSearch() {
             </div>
           </div>
         `;
-      }).join('')}
+  }).join('')}
     </div>
   `;
-  
+
   // Store matches for click handler
   window._domainSearchMatches = matches;
 }
@@ -2502,9 +2503,9 @@ function executeDomainSearch() {
 function openDomainSearchMail(idx) {
   const matches = window._domainSearchMatches;
   if (!matches || !matches[idx]) return;
-  
+
   const mail = matches[idx].mail;
-  
+
   // Mark as read
   mail.read = true;
   if (mail.id && mail.accountEmail) {
@@ -2512,15 +2513,15 @@ function openDomainSearchMail(idx) {
     readMails[mail.id] = true;
     localStorage.setItem('vmc_read_mails', JSON.stringify(readMails));
   }
-  
+
   // Open the mail reader overlay
   const overlay = document.getElementById('codemail-reader-overlay');
   if (overlay) overlay.classList.remove('hidden');
-  
+
   document.getElementById('codemail-reader-subject').textContent = mail.subject || '(No Subject)';
   document.getElementById('codemail-reader-from').textContent = `From: ${mail.from || 'Unknown'}`;
   document.getElementById('codemail-reader-date').textContent = `Date: ${mail.date ? new Date(mail.date).toLocaleString() : '--'}`;
-  
+
   const bodyEl = document.getElementById('codemail-reader-body');
   if (bodyEl) {
     if (mail.body && (mail.body.includes('<') && mail.body.includes('>'))) {
@@ -2529,7 +2530,7 @@ function openDomainSearchMail(idx) {
       bodyEl.innerHTML = `<pre class="codemail-text-content">${escapeHtml(mail.body || mail.preview || 'No content available.')}</pre>`;
     }
   }
-  
+
   // Re-render inbox to update read status
   renderCodeMailInbox();
 }
